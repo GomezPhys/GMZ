@@ -685,3 +685,91 @@ ggsave(
   height = 8,
   dpi = 300
 )
+
+
+# =====================================================
+# GXT PEAK ANALYSIS
+# HOLM-BONFERRONI MULTIPLE COMPARISON ADJUSTMENT
+# =====================================================
+
+library(dplyr)
+
+# Apply Holm adjustment to the five LMM p-values
+GXT_Peak_Results <- GXT_Peak_Results %>%
+  mutate(
+    P_Holm = p.adjust(P_value, method = "holm")
+  )
+
+# Display results
+GXT_Peak_Results %>%
+  select(
+    Variable,
+    ECC,
+    CON,
+    Difference,
+    CI_Lower,
+    CI_Upper,
+    P_value,
+    P_Holm
+  ) %>%
+  print()
+
+View(GXT_Peak_Results)
+
+# Fit lactate model
+Lactate_model <- lmer(
+  Lactate ~ Condition + (1 | ID),
+  data = Peak,
+  REML = TRUE
+)
+
+# Obtain the main effect of Condition
+anova(Lactate_model, type = 3)
+
+
+library(lmerTest)
+library(dplyr)
+
+variables <- c("VO2", "HR", "RPE", "PO", "Lactate")
+
+Condition_results <- lapply(variables, function(var) {
+  
+  # Select valid observations
+  data_var <- Peak %>%
+    filter(
+      !is.na(.data[[var]]),
+      !is.na(Condition),
+      !is.na(ID)
+    )
+  
+  # Fit LMM
+  model <- lmer(
+    as.formula(paste(var, "~ Condition + (1 | ID)")),
+    data = data_var,
+    REML = TRUE
+  )
+  
+  # Extract main effect of Condition
+  aov_table <- anova(model, type = 3)
+  
+  data.frame(
+    Variable = var,
+    F_value = aov_table["Condition", "F value"],
+    df1 = aov_table["Condition", "NumDF"],
+    df2 = aov_table["Condition", "DenDF"],
+    P_value = aov_table["Condition", "Pr(>F)"]
+  )
+})
+
+# Combine results
+Condition_results <- bind_rows(Condition_results)
+
+# Apply Holm correction
+Condition_results <- Condition_results %>%
+  mutate(
+    P_Holm = p.adjust(P_value, method = "holm")
+  )
+
+# Display results
+print(Condition_results)
+View(Condition_results)
